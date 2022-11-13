@@ -1,9 +1,11 @@
 package com.hmdp.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.RandomUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.Result;
+import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
@@ -82,8 +84,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             user = creatUserWithPhone(phone);
         }
         //7.存在，保存用户信息到session
-        session.setAttribute("user",session);
-        return null;
+        //BeanUtil.copyProperties() 方法可以进行对象间的拷贝
+        session.setAttribute("user", BeanUtil.copyProperties(user, UserDTO.class));
+        return Result.ok();
     }
 
     /**
@@ -98,6 +101,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         user.setNickName(USER_NICK_NAME_PREFIX+RandomUtil.randomString(10));
         //保存用户
         save(user);
-        return null;
+        return user;
     }
 }
