@@ -1,8 +1,11 @@
 package com.hmdp.utils;
 
 public class RedisConstants {
+    //登录验证码前缀
     public static final String LOGIN_CODE_KEY = "login:code:";
+    //登录验证码有效期
     public static final Long LOGIN_CODE_TTL = 2L;
+    //存储用户token的前缀
     public static final String LOGIN_USER_KEY = "login:token:";
     public static final Long LOGIN_USER_TTL = 36000L;
 
