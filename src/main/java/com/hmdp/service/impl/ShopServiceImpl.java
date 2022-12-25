@@ -93,6 +93,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
         //判断命中的是否是空值
         if (shopJson != null){
+
             //返回一个错误信息
             return null;
         }

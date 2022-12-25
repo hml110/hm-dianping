@@ -9,6 +9,7 @@ import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import javax.annotation.Resource;
 import java.util.List;
@@ -37,7 +38,7 @@ public class VoucherServiceImpl extends ServiceImpl<VoucherMapper, Voucher> impl
 
     @Override
     @Transactional
-    public void addSeckillVoucher(Voucher voucher) {
+    public void addSeckillVoucher(@RequestBody  Voucher voucher) {
         // 保存优惠券
         save(voucher);
         // 保存秒杀信息
