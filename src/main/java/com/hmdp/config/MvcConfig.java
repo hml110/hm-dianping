@@ -43,10 +43,14 @@ public class MvcConfig implements WebMvcConfigurer {
                 "/blog/hot",
                 "/user/code",
                 "/user/login"
-                ).order(1);
+                )
+                .order(1);
 
         //添加全局所有拦截器
-        registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate)).addPathPatterns("/**").order(0);
+        registry
+                .addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate))
+                .addPathPatterns("/**")
+                .order(0); //顺序 0 先执行
 
     }
 }
