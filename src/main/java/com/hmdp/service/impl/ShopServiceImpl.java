@@ -54,10 +54,8 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         //空值对象解决缓存缓存穿透
 //        Shop shop = cacheClient.queryWithPassThrough(CACHE_SHOP_KEY,id, Shop.class,this::getById,CACHE_SHOP_TTL,TimeUnit.MINUTES);
 
-
-
         //逻辑过期解决缓存击穿
-        //使用这个必须要先用测试类添加一个逻辑过期时间
+        //使用这个必须要先用测试类添加一个逻辑过期时间  void testSaveShop()
         Shop shop = cacheClient.queryWithLogicalExpire(CACHE_SHOP_KEY,id, Shop.class,this::getById,CACHE_SHOP_TTL,TimeUnit.MINUTES);
 
         if (shop == null) {
@@ -67,7 +65,6 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         //7.返回
         return Result.ok(shop);
     }
-
 
 
 

@@ -4,12 +4,10 @@ import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
-import com.hmdp.entity.Shop;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
-import java.awt.*;
 import java.time.LocalDateTime;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -125,7 +123,7 @@ public class CacheClient {
         //6.缓存重建
         //6.1 获取互斥锁
         String lockKey = LOCK_SHOP_KEY + id;
-        boolean isLock = tryLock(key);
+        boolean isLock = tryLock(lockKey);
 
         //6.2 判断是否获取锁成功
         if (isLock){
@@ -190,7 +188,7 @@ public class CacheClient {
 
         //5.不存在，返回错误
         if (r == null) {
-            //将空值写入Redis
+            //将空值写入Redis   过期时间两分钟
             redisTemplate.opsForValue().set(key,"",CACHE_NULL_TTL, TimeUnit.MINUTES);
             //返回错误信息
             return null;

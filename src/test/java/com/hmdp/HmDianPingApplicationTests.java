@@ -15,7 +15,7 @@ import java.util.concurrent.Executors;
 class HmDianPingApplicationTests {
 
     @Resource
-    private ShopServiceImpl service;
+    private ShopServiceImpl shopService;
 
 
     @Resource
@@ -27,7 +27,11 @@ class HmDianPingApplicationTests {
 
    @Test
     void testSaveShop(){
-        service.saveShop2Redis(2L,10L);
+       shopService.saveShop2Redis(1L,10L);
+       shopService.saveShop2Redis(2L,10L);
+       shopService.saveShop2Redis(3L,10L);
+       shopService.saveShop2Redis(4L,10L);
+       shopService.saveShop2Redis(5L,10L);
     }
 
     @Test
