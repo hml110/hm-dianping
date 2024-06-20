@@ -30,10 +30,22 @@ public class CacheClient {
 
     private final StringRedisTemplate redisTemplate;
 
+    //创建10个线程的线程池
+    // ExecutorService是Java提供的线程池，也就是说，每次我们需要使用线程的时候，可以通过ExecutorService获得线程。
+    public static final ExecutorService CACHE_REBUILD_EXECUTOR = Executors.newFixedThreadPool(10);
+
     public CacheClient(StringRedisTemplate redisTemplate) {
         this.redisTemplate = redisTemplate;
     }
 
+
+    /**
+     * 将任意Java对象序列化为json并存储在string类型的key中，并且可以设置TTL过期时间
+     * @param key key值
+     * @param value json
+     * @param time 过期时间
+     * @param unit 时间单位
+     */
     public void set(String key, Object value, Long time, TimeUnit unit){
         redisTemplate.opsForValue().set(key,JSONUtil.toJsonStr(value),time,unit);
     }
@@ -46,7 +58,6 @@ public class CacheClient {
      * @param unit
      */
     public void setWithLogicalExpire(String key, Object value, Long time, TimeUnit unit){
-
         RedisData redisData = new RedisData();
         //写入数据
         redisData.setData(value);
@@ -55,9 +66,7 @@ public class CacheClient {
     }
 
 
-    //创建10个线程的线程池
-    // ExecutorService是Java提供的线程池，也就是说，每次我们需要使用线程的时候，可以通过ExecutorService获得线程。
-    public static final ExecutorService CACHE_REBUILD_EXECUTOR = Executors.newFixedThreadPool(10);
+
 
 
     /**
@@ -133,6 +142,13 @@ public class CacheClient {
             //6.3 成功，开启独立线程，实现缓存重建
             CACHE_REBUILD_EXECUTOR.submit(()->{
                 try {
+                     /**
+                     * Applies this function to the given argument.
+                     *
+                     * @param t the function argument
+                     * @return the function result
+                     *     R apply(T t);
+                     */
                     //查询数据库
                     R r1 = dbFallback.apply(id);
 
@@ -199,4 +215,68 @@ public class CacheClient {
         //7.返回
         return r;
     }
+
+
+    /**
+     * 利用互斥锁解决缓存击穿
+     * @param keyPrefix key前缀
+     * @param id 业务id
+     * @param type 实体类型
+     * @param dbFallback 业务函数
+     * @param time 过期时间
+     * @param unit 时间单位
+     * @return
+     * @param <R> 业务实体
+     * @param <ID> id的类型
+     */
+    public <R, ID> R queryWithMutex(
+            String keyPrefix, ID id, Class<R> type, Function<ID, R> dbFallback, Long time, TimeUnit unit) {
+        String key = keyPrefix + id;
+        // 1.从redis查询商铺缓存
+        String shopJson = redisTemplate.opsForValue().get(key);
+        // 2.判断是否存在
+        if (StrUtil.isNotBlank(shopJson)) {
+            // 3.存在，直接返回
+            return JSONUtil.toBean(shopJson, type);
+        }
+        // 判断命中的是否是空值
+        if (shopJson != null) {
+            // 返回一个错误信息
+            return null;
+        }
+
+        // 4.实现缓存重建
+        // 4.1.获取互斥锁
+        String lockKey = LOCK_SHOP_KEY + id;
+        R r = null;
+        try {
+            boolean isLock = tryLock(lockKey);
+            // 4.2.判断是否获取成功
+            if (!isLock) {
+                // 4.3.获取锁失败，休眠并重试
+                Thread.sleep(50);
+                return queryWithMutex(keyPrefix, id, type, dbFallback, time, unit);
+            }
+            // 4.4.获取锁成功，根据id查询数据库
+            r = dbFallback.apply(id);
+            // 5.不存在，返回错误
+            if (r == null) {
+                // 将空值写入redis
+                redisTemplate.opsForValue().set(key, "", CACHE_NULL_TTL, TimeUnit.MINUTES);
+                // 返回错误信息
+                return null;
+            }
+            // 6.存在，写入redis
+            this.set(key, r, time, unit);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }finally {
+            // 7.释放锁
+            unLock(lockKey);
+        }
+        // 8.返回
+        return r;
+    }
+
+
 }
