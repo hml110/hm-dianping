@@ -69,10 +69,10 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         /**
          * 先获取锁，再进入带有事务的函数，解决了可能会导致当前方法事务还没有提交，但是锁已经释放也会导致问题
          */
-        synchronized (userId.toString().intern()){
+        synchronized (userId.toString().intern()){ //intern()返回字符串对象的规范表示形式。  userId.toString() 每次来都是一个全新对象
             //但是以上做法依然有问题，因为你调用的方法，其实是this.的方式调用的，事务想要生效，还得利用代理来生效，所以这个地方，我们需要获得原始的事务对象， 来操作事务
+            // this.没有具有代理对象的功能，Spring事务失效的几种可能之一
             // return this.createVoucherOrder(voucherId);
-
             //获取当前对象的代理对象（事务）
             IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
             return proxy.createVoucherOrder(voucherId);
