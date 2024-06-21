@@ -25,10 +25,20 @@ public class RedisIdWorker {
 
    private StringRedisTemplate redisTemplate;
 
+    /**
+     * 构造函数注入
+     * @param redisTemplate
+     */
     public RedisIdWorker(StringRedisTemplate redisTemplate) {
         this.redisTemplate = redisTemplate;
     }
 
+
+    /**
+     * 获取id
+     * @param keyPrefix 前缀
+     * @return
+     */
     public long nexId(String keyPrefix){
         //1.生成时间戳
         //1.1. 获取当前时间
@@ -41,21 +51,22 @@ public class RedisIdWorker {
         //2.生成序列号
         //2.1 获取当前的日期，精确到天
         String date = now.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        //2.2 自增长 生成每天的一个新前缀，便于统计
+        //2.2 自增长 生成每天的一个新前缀，便于统计, 不能一直使用一个key，可能超过32位的上限   这里使用date也方便统计
+        //increment()将存储为键下字符串值的整数值增加一。
         long count = redisTemplate.opsForValue().increment("icr: " + keyPrefix + ":" + date);
 
-        //3.拼接并返回
+        //3.拼接并返回  返回是long
         //使用位运算
-        //时间戳的值向左移动32位,把位置空出来，在取一个或运算。
+        //时间戳的值向左移动32位,把位置空出来，在取一个或运算。    0001 --》左移4位（最低位都是0） = 00010000与1100取或 ===》 00011100
         return timeStamp << COUNT_BITS | count;
     }
 
     public static void main(String[] args) {
         //获取年、月、日、小时、分钟和秒的LocalDateTime实例，将纳秒设置为零。这将返回具有指定年、月、月、日、小时、分钟和秒的LocalDateTime。日期必须对年份和月份有效，否则将引发异常。纳秒字段将设置为零
-        LocalDateTime time = LocalDateTime.of(2022,1,1,0,0,0);
+        LocalDateTime time = LocalDateTime.of(2024,1,1,0,0,0);
         //将此日期时间转换为1970-01-01T00:00:00Z历元的秒数。这将结合本地日期时间和指定的偏移量来计算纪元秒值，即1970-01-01T00:00:00Z之间经过的秒数。历元之后的时间线上的瞬间是正的，较早的是负的。
         long second = time.toEpochSecond(ZoneOffset.UTC);
-        System.out.println("second = " + second);
+        System.out.println("second = " + second); //second = 1704067200
     }
 
 

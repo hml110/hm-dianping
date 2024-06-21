@@ -57,7 +57,7 @@ class HmDianPingApplicationTests {
            latch.countDown();
         };
         long begin = System.currentTimeMillis();
-        //将任务提交到线程池
+        //将任务提交到线程池  300个线程
         for (int i = 0; i < 300; i++) {
             es.submit(task);
         }
