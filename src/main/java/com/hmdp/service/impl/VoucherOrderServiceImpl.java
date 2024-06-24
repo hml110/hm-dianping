@@ -8,8 +8,10 @@ import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherOrderService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.utils.RedisIdWorker;
+import com.hmdp.utils.SimpleRedisLock;
 import com.hmdp.utils.UserHolder;
 import org.springframework.aop.framework.AopContext;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
     @Resource
     private RedisIdWorker redisIdWorker;
+
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
 
     /**
      * 秒杀优惠券的方法
@@ -63,24 +68,29 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             //库存不足
             return Result.fail("库存不足！");
         }
-
         Long userId = UserHolder.getUser().getId();
         //加锁创建订单
-        /**
-         * 先获取锁，再进入带有事务的函数，解决了可能会导致当前方法事务还没有提交，但是锁已经释放也会导致问题
-         */
-        synchronized (userId.toString().intern()){ //intern()返回字符串对象的规范表示形式。  userId.toString() 每次来都是一个全新对象
-            //但是以上做法依然有问题，因为你调用的方法，其实是this.的方式调用的，事务想要生效，还得利用代理来生效，所以这个地方，我们需要获得原始的事务对象， 来操作事务
-            // this.没有具有代理对象的功能，Spring事务失效的几种可能之一
-            // return this.createVoucherOrder(voucherId);
+        // 创建锁对象
+        SimpleRedisLock lock = new SimpleRedisLock("order" + userId, stringRedisTemplate);
+        // 获取锁
+        boolean tryLock = lock.tryLock(1200);
+        // 判断是否获取锁成功
+        if (!tryLock) {
+            // 获取锁失败，返回错误信息
+            return Result.fail("不允许重复下单！");
+        }
+        try {
             //获取当前对象的代理对象（事务）
             IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
             return proxy.createVoucherOrder(voucherId);
+        }finally {
+            // 释放锁
+            lock.unLock();
         }
     }
 
     @Transactional  //这里涉及到了两张表的操作
-    public  Result createVoucherOrder(Long voucherId) {
+    public Result createVoucherOrder(Long voucherId) {
         //5.一人一单
         Long userId = UserHolder.getUser().getId();
         /**
@@ -90,38 +100,38 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
          * intern() :返回字符串对象的规范表示形式。
          * 这样的话，只要值是一样的，锁是一样的
          */
-            //5.1. 查询订单
-            //查询数量
-            int count = query().eq("user_id", userId).eq("voucher_id", voucherId).count();
-            //5.2. 判断是否存在
-            if (count > 0) {
-                //用户已经购买过了
-                return Result.fail("用户已经购买过一次！");
-            }
-            //6.扣减库存
-            boolean sucess = seckillVoucherService.update()
-                    .setSql("stock = stock - 1")  // set stock = stock -1
-                    //cas法解决库存问题：修改时对比库存
-                    .eq("voucher_id", voucherId).gt("stock", 0) // where id = ? and stock =?
-                    .update();
-            if (!sucess) {
-                //扣减失败
-                return Result.fail("库存不足！");
-            }
-            //7.创建订单
-            VoucherOrder voucherOrder = new VoucherOrder();
-            //7.1 订单id
-            long orderId = redisIdWorker.nexId("order");
-            voucherOrder.setId(orderId);
-            //7.2 用户id
-            voucherOrder.setUserId(userId);
-            //7.3 优惠劵id
-            voucherOrder.setVoucherId(voucherId);
-            //保存记录
-            save(voucherOrder);
-
-            //8.返回订单id
-            return Result.ok(orderId);
+        //5.1. 查询订单
+        //查询数量
+        int count = query().eq("user_id", userId).eq("voucher_id", voucherId).count();
+        //5.2. 判断是否存在
+        if (count > 0) {
+            //用户已经购买过了
+            return Result.fail("用户已经购买过一次！");
         }
+        //6.扣减库存
+        boolean sucess = seckillVoucherService.update()
+                .setSql("stock = stock - 1")  // set stock = stock -1
+                //cas法解决库存问题：修改时对比库存
+                .eq("voucher_id", voucherId).gt("stock", 0) // where id = ? and stock =?
+                .update();
+        if (!sucess) {
+            //扣减失败
+            return Result.fail("库存不足！");
+        }
+        //7.创建订单
+        VoucherOrder voucherOrder = new VoucherOrder();
+        //7.1 订单id
+        long orderId = redisIdWorker.nexId("order");
+        voucherOrder.setId(orderId);
+        //7.2 用户id
+        voucherOrder.setUserId(userId);
+        //7.3 优惠劵id
+        voucherOrder.setVoucherId(voucherId);
+        //保存记录
+        save(voucherOrder);
+
+        //8.返回订单id
+        return Result.ok(orderId);
+    }
 
 }
