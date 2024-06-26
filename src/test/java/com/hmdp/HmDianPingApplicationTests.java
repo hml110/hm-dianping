@@ -34,6 +34,12 @@ class HmDianPingApplicationTests {
     @Resource
     private RedissonClient redissonClient;
 
+    @Resource
+    private RedissonClient redissonClient2;
+
+    @Resource
+    private RedissonClient redissonClient3;
+
     //定义大小为500的线程池
     private ExecutorService es = Executors.newFixedThreadPool(500);
 
@@ -77,7 +83,19 @@ class HmDianPingApplicationTests {
 
     }
 
+
+    /**
+     * 联锁 multiLock
+     */
     RLock lock = null;
+
+
+    /**
+     * 三个独立节点对应的三个独立锁
+     */
+    RLock lock1 = null;
+    RLock lock2 = null;
+    RLock lock3 = null;
 
 
     /**
@@ -85,7 +103,15 @@ class HmDianPingApplicationTests {
      */
     @Test
     void setUp(){
-        lock = redissonClient.getLock("order");
+        lock1 = redissonClient.getLock("order");
+        lock2 = redissonClient2.getLock("order");
+        lock3 = redissonClient3.getLock("order");
+
+
+        // 创建联锁 multiLock
+        lock = redissonClient.getMultiLock(lock1, lock2, lock3);
+
+
     }
 
     /**
@@ -93,6 +119,7 @@ class HmDianPingApplicationTests {
      */
     @Test
     void method1() throws InterruptedException {
+        setUp();
         // 尝试获取锁
         boolean isLock = lock.tryLock(1L,TimeUnit.SECONDS);
         if (!isLock) {
