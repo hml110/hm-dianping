@@ -1,6 +1,7 @@
 package com.hmdp.service.impl;
 
 import com.hmdp.dto.Result;
+import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.SeckillVoucher;
 import com.hmdp.entity.VoucherOrder;
 import com.hmdp.mapper.VoucherOrderMapper;
@@ -13,12 +14,15 @@ import com.hmdp.utils.UserHolder;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.aop.framework.AopContext;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
+import java.util.Collections;
 
 /**
  * <p>
@@ -45,14 +49,54 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     private RedissonClient redissonClient;
 
     /**
+     * 加载lua脚本
+     */
+    private static final DefaultRedisScript<Long> SECKILL_SCRIPT;
+
+    static {
+        SECKILL_SCRIPT = new DefaultRedisScript<>();
+        SECKILL_SCRIPT.setLocation(new ClassPathResource("lua/seckill.lua"));
+        SECKILL_SCRIPT.setResultType(Long.class);
+    }
+
+
+    /**
      * 秒杀优惠券的方法
      *
      * @param voucherId
      * @return
      */
     @Override
-
     public Result seckillVoucher(Long voucherId) {
+        // 获取用户id
+        Long userId = UserHolder.getUser().getId();
+        long orderId = redisIdWorker.nexId("order");
+        //1.执行lua脚本
+        Long result = stringRedisTemplate.execute(
+                SECKILL_SCRIPT,
+                Collections.emptyList(),
+                voucherId.toString(), userId.toString()
+        );
+        //2. 判断结果是否为0
+        int r = result.intValue();
+        if (r != 0) {
+            //2.1 不为0 没有购买资格
+            return Result.fail(r == 1 ? "库存不足" : "不能重复下单");
+        }
+        //2.2 为0 有购买资格，把下单的信息保存到阻塞队列
+        //TODO：保存阻塞队列
+        //3. 返回订单id
+        return Result.ok(orderId);
+    }
+
+    /**
+     * 秒杀优惠券的方法--- 通过数据库
+     *
+     * @param voucherId
+     * @return
+     */
+
+    public Result seckillVoucherByDB(Long voucherId) {
         //1. 查询优惠劵
         SeckillVoucher voucher = seckillVoucherService.getById(voucherId);
 
@@ -89,12 +133,18 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             //获取当前对象的代理对象（事务）
             IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
             return proxy.createVoucherOrder(voucherId);
-        }finally {
+        } finally {
             // 释放锁
             lock.unlock();
         }
     }
 
+    /**
+     * 创建秒杀卷订单
+     *
+     * @param voucherId
+     * @return
+     */
     @Transactional  //这里涉及到了两张表的操作
     public Result createVoucherOrder(Long voucherId) {
         //5.一人一单
