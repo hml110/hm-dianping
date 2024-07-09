@@ -1,14 +1,21 @@
 package com.hmdp.utils;
 
+import cn.hutool.core.lang.UUID;
 import com.hmdp.config.MinioProp;
-import com.hmdp.dto.Result;
-import io.minio.MinioClient;
+import com.hmdp.dto.FileVo;
+import io.minio.*;
+import io.minio.http.Method;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
@@ -17,9 +24,6 @@ public class MinioUtils {
     @Resource
     private MinioClient client;
 
-    @Resource
-    private MinioProp minioProp;
-
     /**
      * 创建bucket
      *
@@ -27,41 +31,134 @@ public class MinioUtils {
      */
     @SneakyThrows
     public void createBucket(String bucketName) {
-        if (!client.bucketExists(bucketName)) {
-            client.makeBucket(bucketName);
+        // 检查存储桶是否已经存在
+        if (client.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build())) {
+            log.info("Bucket already exists.");
+        } else {
+            // 创建一个名为ota的存储桶
+            client.makeBucket(MakeBucketArgs.builder().bucket(bucketName).build());
+            log.info("create a new bucket.");
         }
     }
 
     /**
-     * 上传文件
-     *
-     * @param file
-     * @param bucketName
-     * @return
-     */
-    public Result uploadFile(MultipartFile file, String bucketName) {
-        Result result = new Result();
-        if (null == file || 0 == file.getSize()) {
-            result.setErrorMsg("上传文件不能为空");
-            return result;
-        }
+     * @MonthName：upload
+     * @Description： 上传文件
+     * @Author：tanyp
+     * @Date：2023/07/27 15:52
+     * @Param： [file, bucketName]
+     * @return：void
+     **/
+    public FileVo upload(MultipartFile file, String bucketName) {
         try {
-            // 判断存储桶是否存在
             createBucket(bucketName);
-            // 文件名
-            String originalFilename = file.getOriginalFilename();
-            // 新的文件名 = 存储桶名称_时间戳.后缀名
-            String fileName = bucketName + "_" + System.currentTimeMillis() + originalFilename.substring(originalFilename.lastIndexOf("."));
-            // 开始上传
-            client.putObject(bucketName,fileName,file.getInputStream(),file.getContentType());
-            result.setSuccess(true);
-            result.setData( minioProp.getEndpoint() + "/" + bucketName + "/" + fileName);
-            return result;
-        }catch (Exception e){
-            log.error(e.getMessage());
+
+            String oldName = file.getOriginalFilename();
+            String fileName = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + UUID.randomUUID() + oldName.substring(oldName.lastIndexOf("."));
+
+            client.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(fileName)
+                            .stream(file.getInputStream(), file.getSize(), 0)
+                            .contentType(file.getContentType()).build()
+            );
+
+            String url = this.getObjUrl(bucketName, fileName);
+            return FileVo.builder()
+                    .oldFileName(oldName)
+                    .newFileName(fileName)
+                    .fileUrl(url.substring(0, url.indexOf("?")))
+                    .build();
+        } catch (Exception e) {
+            log.error("上传文件出错:{}", e);
+            return null;
         }
-        return result;
+    }
+    /**
+     * @MonthName：uploads
+     * @Description： 上传多个文件
+     * @Author：tanyp
+     * @Date：2023/07/27 15:52
+     * @Param： [file, bucketName]
+     * @return：void
+     **/
+    public List<FileVo> uploads(List<MultipartFile> files, String bucketName) {
+        try {
+            List<FileVo> list = new ArrayList<>();
+            createBucket(bucketName);
+
+            for (MultipartFile file : files) {
+                String oldName = file.getOriginalFilename();
+                String fileName = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) +UUID.randomUUID() + oldName.substring(oldName.lastIndexOf("."));
+
+                client.putObject(
+                        PutObjectArgs.builder()
+                                .bucket(bucketName)
+                                .object(fileName)
+                                .stream(file.getInputStream(), file.getSize(), 0)
+                                .contentType(file.getContentType()).build()
+                );
+
+                String url = this.getObjUrl(bucketName, fileName);
+                list.add(
+                        FileVo.builder()
+                                .oldFileName(oldName)
+                                .newFileName(fileName)
+                                .fileUrl(url.substring(0, url.indexOf("?")))
+                                .build()
+                );
+            }
+            return list;
+        } catch (Exception e) {
+            log.error("上传文件出错:{}", e);
+            return null;
+        }
     }
 
+    /**
+     * @MonthName：download
+     * @Description： 下载文件
+     * @Author：tanyp
+     * @Date：2023/07/27 15:54
+     * @Param： [bucketName, fileName]
+     * @return：void
+     **/
+    public void download(String bucketName, String fileName) throws Exception {
+        client.downloadObject(DownloadObjectArgs.builder().bucket(bucketName).filename(fileName).build());
+    }
+
+
+    /**
+     * @MonthName：getObjUrl
+     * @Description： 获取文件链接
+     * @Author：tanyp
+     * @Date：2023/07/27 15:55
+     * @Param： [bucketName, fileName]
+     * @return：java.lang.String
+     **/
+    public String getObjUrl(String bucketName, String fileName) throws Exception {
+        return client.getPresignedObjectUrl(
+                GetPresignedObjectUrlArgs.builder()
+                        .bucket(bucketName)
+                        .object(fileName)
+                        .method(Method.GET)
+                        .expiry(30, TimeUnit.SECONDS)
+                        .build()
+        );
+    }
+
+
+    /**
+     * @MonthName：delete
+     * @Description： 删除文件
+     * @Author：tanyp
+     * @Date：2023/5/26 15:56
+     * @Param： [bucketName, fileName]
+     * @return：void
+     **/
+    public void delete(String bucketName, String fileName) throws Exception {
+        client.removeObject(RemoveObjectArgs.builder().bucket(bucketName).object(fileName).build());
+    }
 
 }

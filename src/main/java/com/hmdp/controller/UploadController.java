@@ -2,6 +2,7 @@ package com.hmdp.controller;
 
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
+import com.hmdp.dto.FileVo;
 import com.hmdp.dto.Result;
 import com.hmdp.utils.MinioUtils;
 import com.hmdp.utils.SystemConstants;
@@ -18,13 +19,13 @@ import static com.hmdp.utils.SystemConstants.BUCKET_LINUX;
 
 @Slf4j
 @RestController
-@RequestMapping("upload")
+@RequestMapping("/upload")
 public class UploadController {
 
     @Resource
     private MinioUtils minioUtils;
 
-    @PostMapping("blog")
+    @PostMapping("/blog")
     public Result uploadImage(@RequestParam("file") MultipartFile image) {
         // 获取原始文件名称
         String originalFilename = image.getOriginalFilename();
@@ -32,11 +33,11 @@ public class UploadController {
         String fileName = createNewFileName(originalFilename);
         // 保存文件
 //            image.transferTo(new File(SystemConstants.IMAGE_UPLOAD_DIR, fileName));
-        minioUtils.uploadFile(image,SystemConstants.BUCKET_LINUX);
+        FileVo upload = minioUtils.upload(image, BUCKET_LINUX);
 
         // 返回结果
-        log.debug("文件上传成功，{}", fileName);
-        return Result.ok(fileName);
+        log.debug("文件上传成功，{}", upload.getNewFileName());
+        return Result.ok(upload.getNewFileName());
     }
 
     @GetMapping("/blog/delete")
