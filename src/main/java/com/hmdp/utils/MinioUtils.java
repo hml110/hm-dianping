@@ -1,6 +1,7 @@
 package com.hmdp.utils;
 
 import cn.hutool.core.lang.UUID;
+import cn.hutool.core.util.StrUtil;
 import com.hmdp.config.MinioProp;
 import com.hmdp.dto.FileVo;
 import io.minio.*;
@@ -52,9 +53,9 @@ public class MinioUtils {
     public FileVo upload(MultipartFile file, String bucketName) {
         try {
             createBucket(bucketName);
-
             String oldName = file.getOriginalFilename();
-            String fileName = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + UUID.randomUUID() + oldName.substring(oldName.lastIndexOf("."));
+            // 获取后缀
+            String fileName = oldName.substring(0, oldName.lastIndexOf(".")) + "_" + System.currentTimeMillis() + oldName.substring(oldName.lastIndexOf("."));
 
             client.putObject(
                     PutObjectArgs.builder()
@@ -75,6 +76,7 @@ public class MinioUtils {
             return null;
         }
     }
+
     /**
      * @MonthName：uploads
      * @Description： 上传多个文件
@@ -90,7 +92,7 @@ public class MinioUtils {
 
             for (MultipartFile file : files) {
                 String oldName = file.getOriginalFilename();
-                String fileName = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) +UUID.randomUUID() + oldName.substring(oldName.lastIndexOf("."));
+                String fileName = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + UUID.randomUUID() + oldName.substring(oldName.lastIndexOf("."));
 
                 client.putObject(
                         PutObjectArgs.builder()

@@ -37,7 +37,7 @@ public class UploadController {
 
         // 返回结果
         log.debug("文件上传成功，{}", upload.getNewFileName());
-        return Result.ok(upload.getNewFileName());
+        return Result.ok(upload);
     }
 
     @GetMapping("/blog/delete")
