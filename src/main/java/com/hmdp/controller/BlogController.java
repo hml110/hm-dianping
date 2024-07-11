@@ -29,8 +29,6 @@ public class BlogController {
 
     @Resource
     private IBlogService blogService;
-    @Resource
-    private IUserService userService;
 
     @PostMapping
     public Result saveBlog(@RequestBody Blog blog) {
@@ -83,7 +81,16 @@ public class BlogController {
      */
     @GetMapping("/{id}")
     public Result queryBlogById(@PathVariable(value = "id") Long id) {
-
         return blogService.queryBlogById(id);
+    }
+
+    /**
+     * 获取点赞列表
+     * @param id
+     * @return
+     */
+    @GetMapping("/likes/{id}")
+    public Result queryBlogLikes(@PathVariable("id") Long id) {
+        return blogService.queryBlogLikes(id);
     }
 }
