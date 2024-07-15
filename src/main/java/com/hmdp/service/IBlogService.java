@@ -49,4 +49,12 @@ public interface IBlogService extends IService<Blog> {
      * @return
      */
     Result saveBlog(Blog blog);
+
+    /**
+     * 获取关注用户的消息
+     * @param max
+     * @param offset
+     * @return
+     */
+    Result queryBlogOfFollow(Long max, Integer offset);
 }

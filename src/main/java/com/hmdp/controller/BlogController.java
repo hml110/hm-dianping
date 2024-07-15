@@ -33,6 +33,7 @@ public class BlogController {
 
     /**
      * 保存笔记
+     *
      * @param blog
      * @return
      */
@@ -43,6 +44,7 @@ public class BlogController {
 
     /**
      * 笔记点赞
+     *
      * @param id
      * @return
      */
@@ -65,17 +67,19 @@ public class BlogController {
 
     /**
      * 获取热门blog
+     *
      * @param current
      * @return
      */
     @GetMapping("/hot")
     public Result queryHotBlog(@RequestParam(value = "current", defaultValue = "1") Integer current) {
-      return blogService.queryHotBlog(current);
+        return blogService.queryHotBlog(current);
     }
 
 
     /**
      * 根据id获取Blog
+     *
      * @param id
      * @return
      */
@@ -86,6 +90,7 @@ public class BlogController {
 
     /**
      * 获取点赞列表
+     *
      * @param id
      * @return
      */
@@ -96,7 +101,8 @@ public class BlogController {
 
 
     /**
-     *  根据id查询博主的探店笔记
+     * 根据id查询博主的探店笔记
+     *
      * @param current
      * @param id
      * @return
@@ -111,5 +117,17 @@ public class BlogController {
         // 获取当前页数据
         List<Blog> records = page.getRecords();
         return Result.ok(records);
+    }
+
+
+    /**
+     * 获取关注用户的消息
+     * @param max
+     * @param offset
+     * @return
+     */
+    @GetMapping("/of/follow")
+    public Result queryBlogOfFollow(@RequestParam(value = "lastId") Long max, @RequestParam(value = "offset",defaultValue = "0") Integer offset) {
+        return blogService.queryBlogOfFollow(max,offset);
     }
 }
