@@ -9,11 +9,21 @@ import org.junit.jupiter.api.Test;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.geo.Point;
+import org.springframework.data.redis.connection.RedisGeoCommands;
+import org.springframework.data.redis.core.ListOperations;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 import static com.hmdp.utils.RedisConstants.CACHE_SHOP_KEY;
+import static com.hmdp.utils.RedisConstants.SHOP_GEO_KEY;
 
 @SpringBootTest
 @Slf4j
@@ -39,6 +49,10 @@ class HmDianPingApplicationTests {
 
     @Resource
     private RedissonClient redissonClient3;
+
+
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
 
     //定义大小为500的线程池
     private ExecutorService es = Executors.newFixedThreadPool(500);
@@ -102,7 +116,7 @@ class HmDianPingApplicationTests {
      * 设置锁
      */
     @Test
-    void setUp(){
+    void setUp() {
         lock1 = redissonClient.getLock("order");
         lock2 = redissonClient2.getLock("order");
         lock3 = redissonClient3.getLock("order");
@@ -121,7 +135,7 @@ class HmDianPingApplicationTests {
     void method1() throws InterruptedException {
         setUp();
         // 尝试获取锁
-        boolean isLock = lock.tryLock(1L,TimeUnit.SECONDS);
+        boolean isLock = lock.tryLock(1L, TimeUnit.SECONDS);
         if (!isLock) {
             log.error("获取锁失败......method1()");
             return;
@@ -131,11 +145,12 @@ class HmDianPingApplicationTests {
             method2();
             log.info("开始执行业务......method1()");
 
-        }finally {
+        } finally {
             log.warn("准备释放锁......1");
             lock.unlock();
         }
     }
+
     void method2() {
         boolean isLock = lock.tryLock();
         if (!isLock) {
@@ -147,9 +162,36 @@ class HmDianPingApplicationTests {
 
             log.info("开始执行业务......method1()");
 
-        }finally {
+        } finally {
             log.warn("准备释放锁......1");
             lock.unlock();
+        }
+    }
+
+    @Test
+    void loadShowData() {
+        // 1. 查询店铺信息
+        List<Shop> list = shopService.list();
+        // 2. 把店铺信息分组按照typeId
+        Map<Long, List<Shop>> map = list.stream().collect(Collectors.groupingBy(Shop::getTypeId));
+        // 3.分配完成存储写入redis
+        for (Map.Entry<Long, List<Shop>> entry : map.entrySet()) {
+            // 3.1 获取类型的id
+            Long typeID = entry.getKey();
+            String key = SHOP_GEO_KEY + typeID;
+            //3.2 获取同类型的shop
+            List<Shop> value = entry.getValue();
+            List<RedisGeoCommands.GeoLocation<String>> locations = new ArrayList<>(value.size());
+            // 3.3 写入redis geoadd key 维度 精度 member
+            for (Shop shop : value) {
+//                stringRedisTemplate.opsForGeo().add(key,new Point(shop.getX(),shop.getY()),shop.getId().toString());  // 这种需要一个一个的发送请求
+                locations.add(
+                        new RedisGeoCommands.GeoLocation<>(
+                                shop.getId().toString(),
+                                new Point(shop.getX(),shop.getY())
+                        ));
+            }
+            stringRedisTemplate.opsForGeo().add(key,locations);
         }
     }
 }
